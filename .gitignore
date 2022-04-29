@@ -1,1 +1,3 @@
 ./out_img/*
+./checkpoints
+./models
