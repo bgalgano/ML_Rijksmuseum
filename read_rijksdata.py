@@ -101,8 +101,8 @@ def load_data(MIN_NUM_ARTWORK=10,img_folder ='/Users/erebor/Downloads/out_img',l
     labels_onehot = tf.one_hot(indices=labels,depth=depth)
     names = names_
     print('\n\nDataset loaded!')
-    print("images shape:",images.shape)
-    print("labels shape:",labels.shape)
+    print("images shape:\t",images.shape)
+    print("labels shape:\t",labels.shape)
     print("labels (one-hot):",labels_onehot.shape)
-    print("names shape:",names.shape)
+    print("names shape:\t",names.shape)
     return images, labels_onehot, labels, names
