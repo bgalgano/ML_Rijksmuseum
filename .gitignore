@@ -12,3 +12,10 @@ models/*
 ./.git/objects/pack/tmp_pack_FlYzJE
 ./.git/objects/pack/tmp_pack_8WXbnM
 ./.git/objects/pack/pack-3f2026d4013cfc93645fa239074e09fdcf9c379a.pack
+./vectors.csv
+./checkpoints/enet_2022-05-03_01-47.data-00000-of-00001
+./aggregrate_vectors.csv
+./.ipynb_checkpoints/vectors-checkpoint.csv
+./.git/objects/pack/tmp_pack_FlYzJE
+./.git/objects/pack/tmp_pack_8WXbnM
+./.git/objects/pack/pack-3f2026d4013cfc93645fa239074e09fdcf9c379a.pack

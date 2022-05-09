@@ -149,7 +149,7 @@ def get_aggregrate_vectors(vectors,labels,names):
 
 def plot_aggregate_vectors(aggregate_vectors,artistnames,n=3):
     idx = list(range(aggregate_vectors.shape[0]))
-    idxs = np.random.choice(a=idx,size=n*n)
+    idxs = np.random.choice(a=idx,size=n*n,replace=False)
     vectors = aggregate_vectors[idxs]
     artists = artistnames[idxs]
     
@@ -165,65 +165,90 @@ def plot_aggregate_vectors(aggregate_vectors,artistnames,n=3):
     plt.show()
     plt.close()
     
-def load_vectors(vectors,aggregate_vectors,artistnums,names,labels,train_val_split,dev_split):
+# Query Image Removal Function
+def query_image_remover(query_vector, aggregate_vector, artcount):
+    new_aggregate_vector = (aggregate_vector - (query_vector * (1/artcount))) * (artcount/(artcount-1))
+    return new_aggregate_vector
 
+def load_vectors(vectors,names,labels,train_val_split,dev_split):
 
     total_bc = np.bincount(labels) # get count of artists
     artcounts = total_bc[np.unique(labels)] # get count of artworks for each unique artist
     artistnames = names[np.unique(labels)] # get the name for each unique artist
 
-    # Generate pairs
+    aggregate_vectors = []
+    artistnums = []
+    # iterate through each artist
+    for i in range(len(artcounts)):
+        artistnum = np.unique(labels)[i] # Gets the number that represents this artist from labels
+        artistnums.append(artistnum)
+
+        artistname = artistnames[i] # Gets artist name as string
+        artcount = artcounts[i] # Gets number of art pieces by this artist
+
+        # get indicies of artist's artwork
+        pos_idx = np.where(labels == artistnum)
+
+        # get mean of all vectors belong to same artist
+        aggregate_vector = np.mean(vectors[pos_idx],axis=0)
+
+        # store aggregrate vectors for each artist
+        aggregate_vectors.append(aggregate_vector)
+    aggregate_vectors = np.array(aggregate_vectors)
+
+    # Generate pairs to store query and aggregate vectors and labels
     total_pairs = np.zeros(shape=(len(labels)*2,2))
     total_labels = np.zeros(shape=(len(labels)*2,1))
 
     j = 0
+    total_artcounts = [] # to store count of all artworks per artist
+    # iterate over all artists
     for i in range(len(artcounts)):
         artistnum = np.unique(labels)[i]
         artcount = artcounts[i]
 
-        #Retreiving negative and positive indices
+        # Retreiving negative and positive indices
         pos_idx = np.where(labels == artistnum)[0]
         neg_idx = np.where(labels != artistnum)[0]
 
-        #Adding Positive Pairs for a given artist
+        # Adding postive (matching artist) pairs for a given artist by index within dataset
         for idx in pos_idx:
-            #print('j:',j)
-            #print('total pairs:', total_pairs)
-            #print('idx:',idx)
-            #print('artistnum:',artistnum)
             total_pairs[j,:] = [idx,artistnum]
             total_labels[j] = 1
             j = j + 1
+            total_artcounts.append(artcounts[i])
 
-        #Adding Negative Pairs for a given artist
+        # Adding negative (non-matching artist) pairs for a given artist by index within dataset
         neg_selec = np.random.choice(neg_idx,artcount,replace=False)
         for idx in neg_selec:
             total_pairs[j,:] = [idx,artistnum]
             total_labels[j] = 0
             j = j + 1
+            total_artcounts.append(artcounts[i])
 
-    # Create and Test Split Order
+    # Generate splits for train/dev/validation sets
+    # balance so that similar number of artist examples exist for each set
     goodbalance = False
-    spltest_labels = labels
-
+    spltest_labels = total_pairs[:,1]
     while goodbalance == False:
 
-        #Shuffle data
-        mixer = np.arange(len(labels))
+        # Shuffle data
+        mixer = np.arange(len(total_pairs[:,1]))
         np.random.shuffle(mixer)
         total_pairs = total_pairs[mixer,:]
         total_labels = total_labels[mixer]
 
-        #Make Cutoffs
+        # Make cutoffs
         train_cutoff = int(len(total_pairs) * train_val_split)
         dev_cutoff = int(len(total_pairs) * (train_val_split + dev_split))
 
-        #Test Splits for Balance
-        spltest_labels = spltest_labels[mixer]
+        # test splits for balance
+        spltest_labels = np.array(spltest_labels[mixer]).astype(int)
         train_spltest = spltest_labels[:train_cutoff]
         dev_spltest = spltest_labels[train_cutoff:dev_cutoff]
         val_spltest = spltest_labels[dev_cutoff:]
 
+        total_bc_l = np.bincount(spltest_labels)
         train_bc = np.bincount(train_spltest)
         dev_bc = np.bincount(dev_spltest)
         val_bc = np.bincount(val_spltest)
@@ -231,16 +256,13 @@ def load_vectors(vectors,aggregate_vectors,artistnums,names,labels,train_val_spl
         check_bool = np.array([],dtype=bool)
 
         for i in np.unique(labels):
-            if (len(np.unique(spltest_labels)) == len(np.unique(train_spltest))) and \
-                (len(np.unique(spltest_labels)) == len(np.unique(dev_spltest))) and \
-                (len(np.unique(spltest_labels)) == len(np.unique(train_spltest))):
-
-                train_check = abs(total_bc[i]*0.8 - train_bc[i]) >= total_bc[i]*0.2 
-                dev_check = abs(total_bc[i]*0.1 - dev_bc[i]) >= total_bc[i]*0.08
-                val_check = abs(total_bc[i]*0.1 - val_bc[i]) >= total_bc[i]*0.08 
+            if (len(np.unique(spltest_labels)) == len(np.unique(train_spltest))) and (len(np.unique(spltest_labels)) == len(np.unique(dev_spltest))) and (len(np.unique(spltest_labels)) == len(np.unique(train_spltest))):
+                train_check = abs(total_bc_l[i]*0.8 - train_bc[i]) >= total_bc_l[i]*0.2 
+                dev_check = abs(total_bc_l[i]*0.1 - dev_bc[i]) >= total_bc_l[i]*0.08
+                val_check = abs(total_bc_l[i]*0.1 - val_bc[i]) >= total_bc_l[i]*0.08 
                 check_bool = np.append(check_bool,(train_check or dev_check or val_check))
 
-            elif total_bc[i] != 0:
+            elif total_bc_l[i] != 0:
                 check_bool = np.append(check_bool,False)
 
         if sum(check_bool) <= 0:
@@ -248,21 +270,33 @@ def load_vectors(vectors,aggregate_vectors,artistnums,names,labels,train_val_spl
 
     # Turn Pairs of Indices into Pairs of Vectors
     final_pairs = []
-    total_pairs = total_pairs.astype(int)
-    for total_pair in total_pairs:
+    # iterate over all data examples
+    for i, total_pair in enumerate(total_pairs):
+
         # get query vector index
         vector_idx = int(total_pair[0])
 
         # get aggregrate index  
-        aggregrate_idx = np.where(artistnums==total_pair[-1])[0]
+        aggregrate_idx = np.where(artistnums==total_pair[-1])[0][0]
+
         # get vectors
         aggregrate_vector = aggregate_vectors[aggregrate_idx]
         query_vector = vectors[vector_idx]
+
+        # IF query image is a match and belongs to artist, subtract it from aggregrate vector
+        if total_labels[i] == 1:
+            remover_kwargs = {'query_vector':query_vector,
+                             'aggregate_vector':aggregate_vector,
+                             'artcount':total_artcounts[i]}
+            aggregate_vector = query_image_remover(**remover_kwargs)
+
+        # save to array
         final_pair = np.vstack([aggregrate_vector,query_vector]).T
         final_pairs.append(final_pair)
 
+    # finally split query and aggregrate pairs and labels into train/dev/val sets
     final_pairs = np.array(final_pairs)
-    # set aggregrate and query image pairs and labels into different
+
     train_pairs = final_pairs[:train_cutoff,:,:]
     train_labels = total_labels[:train_cutoff]
 
@@ -271,4 +305,11 @@ def load_vectors(vectors,aggregate_vectors,artistnums,names,labels,train_val_spl
 
     val_pairs = final_pairs[dev_cutoff:,:,:]
     val_labels = total_labels[dev_cutoff:]
+    pairs = [train_pairs,dev_pairs,val_pairs]
+    labels = [train_labels,dev_labels,val_labels]
+    set_names = ['train','dev','val']
+    for pair, label, set_name in zip(pairs,labels,set_names):
+        print('{} set pair shape: '.format(set_name).rjust(25) + str(pair.shape))
+        print('{} set label shape: '.format(set_name).rjust(25) + str(label.shape))
+
     return train_pairs, train_labels, dev_pairs, dev_labels, val_pairs, val_labels
